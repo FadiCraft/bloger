@@ -1,7 +1,115 @@
-- name: 🔧 تشغيل سكريبت النشر
-  env:
-    BLOG_ID: ${{ secrets.BLOG_ID }}
-    CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
-    TOKEN_PICKLE: ${{ secrets.TOKEN_PICKLE }}
-  run: |
-    python scripts/publish.py
+name: 🔧 تجربة بلوجر البسيطة
+
+on:
+  workflow_dispatch:  # تشغيل يدوي فقط
+
+jobs:
+  test-blogger:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. تحميل الكود
+      - name: ⬇️ تحميل الكود
+        uses: actions/checkout@v3
+      
+      # 2. إعداد بايثون
+      - name: 🐍 إعداد Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      # 3. تثبيت مكتبة واحدة فقط
+      - name: 📦 تثبيت requests
+        run: pip install requests
+      
+      # 4. كود التجربة البسيط
+      - name: 🧪 اختبار الاتصال
+        env:
+          BLOG_ID: ${{ secrets.BLOG_ID }}
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          # كود بايثون بسيط للتجربة
+          cat > test.py << 'EOF'
+import os
+import requests
+import json
+
+blog_id = os.getenv('BLOG_ID')
+api_key = os.getenv('API_KEY')
+
+print("="*50)
+print("🔍 بداية الاختبار")
+print("="*50)
+
+# 1. اختبار وجود المتغيرات
+print(f"📌 BLOG_ID: {'✅ موجود' if blog_id else '❌ مفقود'}")
+print(f"📌 API_KEY: {'✅ موجود' if api_key else '❌ مفقود'}")
+
+if not blog_id or not api_key:
+    print("\n❌ اتبع هذه الخطوات:")
+    print("1. اذهب إلى Settings > Secrets > Actions")
+    print("2. أضف Secret جديد:")
+    print("   - Name: BLOG_ID")
+    print("   - Value: 1234567890123456789")
+    print("3. أضف Secret جديد:")
+    print("   - Name: API_KEY")
+    print("   - Value: AIzaSyB... (مفتاح API من Google Cloud)")
+    exit(1)
+
+# 2. محاولة جلب معلومات المدونة
+try:
+    print("\n🌐 جاري الاتصال ببلوجر API...")
+    
+    url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}?key={api_key}"
+    response = requests.get(url, timeout=10)
+    
+    print(f"📡 حالة الاتصال: {response.status_code}")
+    
+    if response.status_code == 200:
+        data = response.json()
+        print("\n🎉 نجاح الاتصال!")
+        print(f"📝 اسم المدونة: {data.get('name', 'غير معروف')}")
+        print(f"🔗 رابط المدونة: {data.get('url', 'غير معروف')}")
+        print(f"📅 تاريخ الإنشاء: {data.get('published', 'غير معروف')}")
+        
+        # اختبار جلب المنشورات
+        posts_url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts?key={api_key}&maxResults=3"
+        posts_response = requests.get(posts_url)
+        
+        if posts_response.status_code == 200:
+            posts_data = posts_response.json()
+            print(f"\n📰 عدد المنشورات: {posts_data.get('totalItems', 0)}")
+            
+            if 'items' in posts_data:
+                print("📋 آخر 3 منشورات:")
+                for i, post in enumerate(posts_data['items'], 1):
+                    status = "مسودة" if post.get('status') == 'DRAFT' else "منشور"
+                    print(f"  {i}. {post['title']} ({status})")
+        else:
+            print("⚠️ لا يمكن جلب المنشورات")
+            
+    elif response.status_code == 403:
+        print("\n🔐 خطأ في التصريح:")
+        print("1. تأكد من تفعيل Blogger API")
+        print("2. تأكد من صحة API Key")
+        print("3. تأكد من تقييد API Key على Blogger API فقط")
+    elif response.status_code == 404:
+        print("\n🔍 المدونة غير موجودة")
+        print("تأكد من صحة BLOG_ID")
+    else:
+        print(f"\n⚠️ خطأ غير متوقع: {response.text[:100]}")
+        
+except requests.exceptions.Timeout:
+    print("\n⏰ انتهت مهلة الاتصال")
+except requests.exceptions.RequestException as e:
+    print(f"\n❌ خطأ في الاتصال: {e}")
+except Exception as e:
+    print(f"\n⚠️ خطأ غير متوقع: {e}")
+
+print("\n" + "="*50)
+print("✅ انتهى الاختبار")
+print("="*50)
+EOF
+
+          # تشغيل الكود
+          python test.py
