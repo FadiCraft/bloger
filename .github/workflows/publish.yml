@@ -1,50 +1,97 @@
-name: Publish to Blogger
+name: 🔄 النشر التلقائي على بلوجر
 
 on:
+  # 1. عند رفع ملفات إلى مجلد posts
   push:
     paths:
-      - 'posts/**'  # يشغل ال workflow فقط عند تغيير posts/
-    branches: [ main ]
+      - 'posts/**'
+      - 'scripts/publish.py'
+    branches: [ main, master ]
+  
+  # 2. يدوياً من صفحة Actions
+  workflow_dispatch:
+  
+  # 3. على جدول زمني (كل يوم الساعة 8 صباحاً)
   schedule:
-    - cron: '0 8 * * *'  # يشغل كل يوم الساعة 8 صباحاً (توقيت UTC)
-  workflow_dispatch:  # يسمح بالتشغيل اليدوي
+    - cron: '0 8 * * *'  # UTC time
+
+# الأذونات المطلوبة
+permissions:
+  contents: write  # للسماح بنقل الملفات إلى الأرشيف
 
 jobs:
-  publish:
+  publish-to-blogger:
     runs-on: ubuntu-latest
     
     steps:
-    - name: ⬇️ تحميل الكود
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      # 1. تحميل الكود
+      - name: ⬇️ تحميل المستودع
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # تحميل كل التاريخ
+      
+      # 2. إعداد Python
+      - name: 🐍 إعداد Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      # 3. تثبيت المكتبات
+      - name: 📦 تثبيت المتطلبات
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      # 4. إنشاء مجلد posts إذا لم يكن موجوداً
+      - name: 📁 تهيئة المجلدات
+        run: |
+          mkdir -p posts
+          mkdir -p published
+          
+          # إذا كان مجلد posts فارغاً، أنشئ مقالة تجريبية
+          if [ -z "$(ls -A posts/)" ]; then
+            cat > posts/مقالة-تجريبية.md << 'EOF'
+# أول مقالة تلقائية
+مرحباً! هذه أول مقالة تنشر تلقائياً عبر GitHub Actions.
 
-    - name: 🐍 إعداد Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+## كيف تعمل؟
+1. ضع مقالاتك في مجلد `posts` بصيغة Markdown
+2. السكريبت سينشرها تلقائياً
+3. المقالات المنشورة تنتقل إلى مجلد `published`
 
-    - name: 📦 تثبيت المكتبات
-      run: |
-        pip install -r requirements.txt
+**يمكنك استخدام تنسيق Markdown:**
+- نقاط
+- *مائل*
+- **عريض**
+- [روابط](https://blogger.com)
 
-    - name: 🔧 تهيئة البيئة
-      env:
-        BLOG_ID: ${{ secrets.BLOG_ID }}
-      run: |
-        # إنشاء ملف client_secret.json من Secrets
-        echo '${{ secrets.CLIENT_SECRET_JSON }}' > client_secret.json
-        
-        # تشغيل سكريبت النشر
-        python scripts/publish.py
-
-    - name: 📤 نقل المقالات المنشورة
-      run: |
-        # نقل المقالات المنشورة إلى مجلد الأرشيف
-        mkdir -p published
-        mv posts/*.md published/ 2>/dev/null || true
-        git config --global user.email "github-actions@github.com"
-        git config --global user.name "GitHub Actions"
-        git add .
-        git commit -m "Move published posts to archive" || true
-        git push || true
+EOF
+            echo "📝 تم إنشاء مقالة تجريبية"
+          fi
+      
+      # 5. تشغيل سكريبت النشر
+      - name: 🚀 تشغيل سكريبت النشر
+        env:
+          # **** هنا تحطهم! ****
+          BLOG_ID: ${{ secrets.BLOG_ID }}
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+          TOKEN_PICKLE: ${{ secrets.TOKEN_PICKLE }}
+        run: |
+          echo "🔧 بدء النشر..."
+          python scripts/publish.py
+      
+      # 6. تحديث المستودع بنقل الملفات المنشورة
+      - name: 💾 حفظ التغييرات
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add .
+          git commit -m "🚀 نقل المقالات المنشورة إلى الأرشيف [أوتوماتيك]" || echo "لا توجد تغييرات جديدة"
+          git push || echo "لا يمكن رفع التغييرات"
+      
+      # 7. إعلام بنجاح العملية
+      - name: 📢 إعلام بالنتيجة
+        if: success()
+        run: |
+          echo "✅ تم تنفيذ النشر بنجاح!"
+          echo "تحقق من مدونتك على بلوجر"
