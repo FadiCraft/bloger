@@ -1,4 +1,4 @@
-name: 🧪 اختبار أولي
+name: 🚀 نشر بلوجر - التجربة الأولى
 
 on: [workflow_dispatch]
 
@@ -6,19 +6,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: 🔍 التحقق من Secrets
-        env:
-          BLOG_ID: ${{ secrets.BLOG_ID }}
-          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+      - name: 📝 طباعة رسالة
         run: |
-          echo "=== التحقق ==="
-          echo "📌 BLOG_ID: $([ -n "$BLOG_ID" ] && echo "✅ موجود" || echo "❌ مفقود")"
-          echo "📌 CLIENT_SECRET_JSON: $([ -n "$CLIENT_SECRET_JSON" ] && echo "✅ موجود" || echo "❌ مفقود")"
+          echo "🎉 مرحباً! هذا أول تشغيل"
+          echo "سأعطيك Token لتضيفه في Secrets"
+          echo "ثم شغلني مرة أخرى للنشر"
           echo ""
-          
-          if [ -n "$BLOG_ID" ] && [ -n "$CLIENT_SECRET_JSON" ]; then
-            echo "🎉 كل شيء جاهز لأول تشغيل!"
-            echo "شغل workflow نشر بلوجر الآن"
-          else
-            echo "⚠️ اكمل إضافة Secrets المفقودة"
-          fi
+          echo "📌 BLOG_ID موجود: ${{ secrets.BLOG_ID != '' && 'نعم' || 'لا' }}"
+          echo "📌 CLIENT_SECRET_JSON موجود: ${{ secrets.CLIENT_SECRET_JSON != '' && 'نعم' || 'لا' }}"
