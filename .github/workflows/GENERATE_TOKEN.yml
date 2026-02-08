@@ -1,67 +1,41 @@
-name: 🔑 توليد TOKEN_PICKLE
+name: 🎫 احصل على Token
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
-  generate:
+  token:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       
-      - name: 🐍 إعداد Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
-      - name: 📦 تثبيت المكتبات
+      - name: Install libs
         run: pip install google-auth-oauthlib
       
-      - name: 🔐 إنشاء client_secret.json
+      - name: Create client_secret.json
         env:
           CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
         run: |
-          echo "$CLIENT_SECRET_JSON" > client_secret.json
-          echo "✅ تم إنشاء client_secret.json"
+          echo "$CLIENT_SECRET_JSON" > client.json
+          echo "File created"
       
-      - name: 🎫 توليد Token
+      - name: Generate Token
         run: |
-          cat > generate.py << 'EOF'
+          python3 -c "
 from google_auth_oauthlib.flow import InstalledAppFlow
-import pickle, base64, sys
+import pickle, base64
 
 SCOPES = ['https://www.googleapis.com/auth/blogger']
 
-try:
-    flow = InstalledAppFlow.from_client_secrets_file('client_secret.json', SCOPES)
-    creds = flow.run_local_server(port=0)
-    
-    token = base64.b64encode(pickle.dumps(creds)).decode()
-    
-    print("🎫 **انسخ كل ما بين الخطوط:**")
-    print("="*80)
-    print(token)
-    print("="*80)
-    print("\n📋 **كيفية الإضافة:**")
-    print("1. Settings → Secrets → Actions")
-    print("2. New repository secret")
-    print("3. Name: TOKEN_PICKLE")
-    print("4. Value: الصق الـToken الكامل")
-    print("5. Add secret")
-    
-    # حفظ في ملف
-    with open('TOKEN.txt', 'w') as f:
-        f.write(token)
-        
-except Exception as e:
-    print(f"❌ خطأ: {e}")
-    sys.exit(1)
-EOF
-          python generate.py
-      
-      - name: 💾 حفظ الـToken في artifact
-        if: success()
-        uses: actions/upload-artifact@v3
-        with:
-          name: blogger-token
-          path: TOKEN.txt
+flow = InstalledAppFlow.from_client_secrets_file('client.json', SCOPES)
+creds = flow.run_local_server(port=0)
+
+token = base64.b64encode(pickle.dumps(creds)).decode()
+print('TOKEN_START')
+print(token)
+print('TOKEN_END')
+"
