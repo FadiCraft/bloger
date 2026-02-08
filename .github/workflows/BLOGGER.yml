@@ -1,0 +1,83 @@
+name: BLOGGER
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ✅ التحقق من النظام
+        run: |
+          echo "=== النظام يعمل ==="
+          echo "🕒 الوقت: $(date)"
+          echo "🐍 Python: $(python3 --version || echo 'غير مثبت')"
+          echo "📁 الملفات:"
+          ls -la
+          
+      - name: 📦 تثبيت مكتبات Google
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+          echo "✅ تم تثبيت المكتبات"
+          
+      - name: 🔐 اختبار Secrets
+        env:
+          BLOG_ID: ${{ secrets.BLOG_ID }}
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+        run: |
+          echo "=== اختبار Secrets ==="
+          
+          if [ -z "$BLOG_ID" ]; then
+            echo "❌ BLOG_ID مفقود"
+          else
+            echo "✅ BLOG_ID موجود"
+          fi
+          
+          if [ -z "$CLIENT_SECRET_JSON" ]; then
+            echo "❌ CLIENT_SECRET_JSON مفقود"
+          else
+            echo "✅ CLIENT_SECRET_JSON موجود"
+            
+            # محاولة قراءة JSON
+            echo "$CLIENT_SECRET_JSON" | python3 -c "import json, sys; json.loads(sys.stdin.read()); print('✅ JSON صالح')" 2>/dev/null || echo "⚠️ JSON غير صالح"
+          fi
+          
+      - name: 🎫 مرحلة الـToken
+        env:
+          BLOG_ID: ${{ secrets.BLOG_ID }}
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+          TOKEN_PICKLE: ${{ secrets.TOKEN_PICKLE }}
+        run: |
+          echo "=== مرحلة الـToken ==="
+          
+          if [ -n "$TOKEN_PICKLE" ]; then
+            echo "✅ TOKEN_PICKLE موجود"
+            echo "📏 طول الـToken: ${#TOKEN_PICKLE} حرف"
+          else
+            echo "📭 TOKEN_PICKLE غير موجود (طبيعي في أول تشغيل)"
+          fi
+          
+          # إنشاء ملف client_secret.json
+          echo "$CLIENT_SECRET_JSON" > client.json
+          echo "📄 تم إنشاء client.json"
+          
+      - name: 📝 نتيجة نهائية
+        run: |
+          echo ""
+          echo "🎯 **الخطوة التالية:**"
+          echo ""
+          
+          if [ -n "${{ secrets.BLOG_ID }}" ] && [ -n "${{ secrets.CLIENT_SECRET_JSON }}" ]; then
+            if [ -z "${{ secrets.TOKEN_PICKLE }}" ]; then
+              echo "1. ✅ لديك BLOG_ID و CLIENT_SECRET_JSON"
+              echo "2. 📝 الآن أنشئ workflow لإنشاء الـToken"
+            else
+              echo "1. ✅ لديك كل الـSecrets المطلوبة"
+              echo "2. 🚀 الآن أنشئ workflow للنشر على بلوجر"
+            fi
+          else
+            echo "❌ مازال ينقصك بعض الـSecrets"
+            echo "   - BLOG_ID: ${{ secrets.BLOG_ID != '' && '✅' || '❌' }}"
+            echo "   - CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON != '' && '✅' || '❌' }}"
+          fi
