@@ -1,115 +1,470 @@
-name: 🔧 تجربة بلوجر البسيطة
+name: 🚀 تشغيل publish.py
 
 on:
-  workflow_dispatch:  # تشغيل يدوي فقط
+  # تشغيل يدوي من واجهة GitHub
+  workflow_dispatch:
+    inputs:
+      publish_type:
+        description: 'نوع النشر'
+        required: false
+        default: 'draft'
+        type: choice
+        options:
+          - draft
+          - publish
+      test_mode:
+        description: 'وضع الاختبار'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.10'
 
 jobs:
-  test-blogger:
+  run-publish-script:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. تحميل الكود
-      - name: ⬇️ تحميل الكود
+      # الخطوة 1: تحميل الكود
+      - name: 📥 تحميل المستودع
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       
-      # 2. إعداد بايثون
-      - name: 🐍 إعداد Python
+      # الخطوة 2: إعداد Python
+      - name: 🐍 إعداد Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: ${{ env.PYTHON_VERSION }}
       
-      # 3. تثبيت مكتبة واحدة فقط
-      - name: 📦 تثبيت requests
-        run: pip install requests
-      
-      # 4. كود التجربة البسيط
-      - name: 🧪 اختبار الاتصال
-        env:
-          BLOG_ID: ${{ secrets.BLOG_ID }}
-          API_KEY: ${{ secrets.API_KEY }}
+      # الخطوة 3: التحقق من هيكل الملفات
+      - name: 📁 التحقق من الملفات
         run: |
-          # كود بايثون بسيط للتجربة
-          cat > test.py << 'EOF'
-import os
-import requests
-import json
+          echo "📂 هيكل الملفات الحالي:"
+          find . -type f -name "*.py" -o -name "*.md" -o -name "*.txt" | sort
+          echo ""
+          
+          # التحقق من وجود scripts/publish.py
+          if [ ! -f "scripts/publish.py" ]; then
+            echo "❌ ملف scripts/publish.py غير موجود!"
+            echo "🔧 جاري إنشاؤه..."
+            mkdir -p scripts
+            # هنا سيأتي محتوى الملف - سننشئه لاحقاً
+          else
+            echo "✅ scripts/publish.py موجود"
+          fi
+          
+          # إنشاء مجلد posts إذا لم يكن موجوداً
+          mkdir -p posts
+          mkdir -p published
+          
+          # إنشاء ملف تجريبي إذا كان المجلد فارغاً
+          if [ ! -f "posts/مقالة-تجريبية.md" ]; then
+            cat > posts/مقالة-تجريبية.md << 'EOF'
+# أول مقالة تجريبية
+هذه مقالة تجريبية للنشر التلقائي على بلوجر.
 
-blog_id = os.getenv('BLOG_ID')
-api_key = os.getenv('API_KEY')
+## محتوى المقالة
+- هذه نقطة أولى
+- وهذه نقطة ثانية
+- وهذه نقطة ثالثة
 
-print("="*50)
-print("🔍 بداية الاختبار")
-print("="*50)
-
-# 1. اختبار وجود المتغيرات
-print(f"📌 BLOG_ID: {'✅ موجود' if blog_id else '❌ مفقود'}")
-print(f"📌 API_KEY: {'✅ موجود' if api_key else '❌ مفقود'}")
-
-if not blog_id or not api_key:
-    print("\n❌ اتبع هذه الخطوات:")
-    print("1. اذهب إلى Settings > Secrets > Actions")
-    print("2. أضف Secret جديد:")
-    print("   - Name: BLOG_ID")
-    print("   - Value: 1234567890123456789")
-    print("3. أضف Secret جديد:")
-    print("   - Name: API_KEY")
-    print("   - Value: AIzaSyB... (مفتاح API من Google Cloud)")
-    exit(1)
-
-# 2. محاولة جلب معلومات المدونة
-try:
-    print("\n🌐 جاري الاتصال ببلوجر API...")
-    
-    url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}?key={api_key}"
-    response = requests.get(url, timeout=10)
-    
-    print(f"📡 حالة الاتصال: {response.status_code}")
-    
-    if response.status_code == 200:
-        data = response.json()
-        print("\n🎉 نجاح الاتصال!")
-        print(f"📝 اسم المدونة: {data.get('name', 'غير معروف')}")
-        print(f"🔗 رابط المدونة: {data.get('url', 'غير معروف')}")
-        print(f"📅 تاريخ الإنشاء: {data.get('published', 'غير معروف')}")
-        
-        # اختبار جلب المنشورات
-        posts_url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts?key={api_key}&maxResults=3"
-        posts_response = requests.get(posts_url)
-        
-        if posts_response.status_code == 200:
-            posts_data = posts_response.json()
-            print(f"\n📰 عدد المنشورات: {posts_data.get('totalItems', 0)}")
-            
-            if 'items' in posts_data:
-                print("📋 آخر 3 منشورات:")
-                for i, post in enumerate(posts_data['items'], 1):
-                    status = "مسودة" if post.get('status') == 'DRAFT' else "منشور"
-                    print(f"  {i}. {post['title']} ({status})")
-        else:
-            print("⚠️ لا يمكن جلب المنشورات")
-            
-    elif response.status_code == 403:
-        print("\n🔐 خطأ في التصريح:")
-        print("1. تأكد من تفعيل Blogger API")
-        print("2. تأكد من صحة API Key")
-        print("3. تأكد من تقييد API Key على Blogger API فقط")
-    elif response.status_code == 404:
-        print("\n🔍 المدونة غير موجودة")
-        print("تأكد من صحة BLOG_ID")
-    else:
-        print(f"\n⚠️ خطأ غير متوقع: {response.text[:100]}")
-        
-except requests.exceptions.Timeout:
-    print("\n⏰ انتهت مهلة الاتصال")
-except requests.exceptions.RequestException as e:
-    print(f"\n❌ خطأ في الاتصال: {e}")
-except Exception as e:
-    print(f"\n⚠️ خطأ غير متوقع: {e}")
-
-print("\n" + "="*50)
-print("✅ انتهى الاختبار")
-print("="*50)
+**يمكنك تعديل هذا الملف أو إضافة ملفات .md جديدة في مجلد posts**
 EOF
+            echo "✅ تم إنشاء مقالة تجريبية"
+          fi
+      
+      # الخطوة 4: إنشاء ملف publish.py إذا لم يكن موجوداً
+      - name: 📝 إنشاء publish.py
+        if: hashFiles('scripts/publish.py') == ''
+        run: |
+          echo "🔧 جاري إنشاء scripts/publish.py..."
+          
+          cat > scripts/publish.py << 'EOF'
+#!/usr/bin/env python3
+"""
+سكريبت النشر التلقائي على بلوجر من GitHub Actions
+"""
 
-          # تشغيل الكود
-          python test.py
+import os
+import json
+import base64
+import pickle
+import sys
+from datetime import datetime
+from pathlib import Path
+
+# مكتبات Google API
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+# ========== الإعدادات ==========
+# هذه تأتي من GitHub Secrets
+BLOG_ID = os.environ.get('BLOG_ID', '')
+SCOPES = ['https://www.googleapis.com/auth/blogger']
+
+# ========== الدوال المساعدة ==========
+def setup_client_secret():
+    """إنشاء ملف client_secret.json من متغير البيئة"""
+    client_secret_json = os.environ.get('CLIENT_SECRET_JSON')
+    
+    if not client_secret_json:
+        print("❌ خطأ: CLIENT_SECRET_JSON غير موجود في متغيرات البيئة")
+        print("🔍 تأكد من إضافته في GitHub Secrets")
+        print("")
+        print("📋 خطوات إضافة Secrets:")
+        print("1. اذهب إلى مستودع GitHub → Settings")
+        print("2. Secrets and variables → Actions")
+        print("3. New repository secret")
+        print("4. الاسم: CLIENT_SECRET_JSON")
+        print("5. القيمة: محتوى ملف client_secret.json")
+        sys.exit(1)
+    
+    try:
+        # تحقق من أن JSON صالح
+        json.loads(client_secret_json)
+        
+        # كتابة الملف
+        with open('client_secret.json', 'w', encoding='utf-8') as f:
+            f.write(client_secret_json)
+        
+        print("✅ تم إنشاء client_secret.json")
+        return True
+    except json.JSONDecodeError as e:
+        print(f"❌ خطأ في تنسيق CLIENT_SECRET_JSON: {e}")
+        sys.exit(1)
+
+def get_credentials():
+    """الحصول على بيانات الاعتماد (Credentials)"""
+    creds = None
+    token_b64 = os.environ.get('TOKEN_PICKLE', '')
+    
+    # 1. محاولة تحميل token من GitHub Secrets
+    if token_b64 and token_b64.strip() != '':
+        try:
+            print("🔑 تحميل Token من البيئة...")
+            token_data = base64.b64decode(token_b64)
+            creds = pickle.loads(token_data)
+            print("✅ تم تحميل Token من Secrets")
+        except Exception as e:
+            print(f"⚠️ فشل تحميل Token: {e}")
+            creds = None
+    
+    # 2. إذا لم يكن هناك token صالح، إنشاء جديد
+    if not creds or not creds.valid:
+        print("🔐 إنشاء مصادقة جديدة...")
+        
+        if creds and creds.expired and creds.refresh_token:
+            print("🔄 تجديد Token...")
+            creds.refresh(Request())
+        else:
+            print("🌐 جاري فتح نافذة المصادقة...")
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'client_secret.json', 
+                SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+        
+        # حفظ Token الجديد كـ Base64
+        token_pickle = pickle.dumps(creds)
+        token_b64_new = base64.b64encode(token_pickle).decode('utf-8')
+        
+        print("\n" + "="*70)
+        print("🚨 **مهم: انسخ هذا الـ Token وأضفه في GitHub Secrets**")
+        print("="*70)
+        print("الاسم: TOKEN_PICKLE")
+        print("القيمة (الجزء الأول):")
+        print(f"{token_b64_new[:100]}...")
+        print("")
+        print("📋 خطوات إضافة Token:")
+        print("1. اذهب إلى GitHub → Settings → Secrets → Actions")
+        print("2. New repository secret")
+        print("3. Name: TOKEN_PICKLE")
+        print("4. Value: الصق الـ Token الكامل (الذي يظهر في الـlogs)")
+        print("5. Add secret")
+        print("6. شغل Workflow مرة أخرى")
+        print("="*70)
+        
+        # إخراج Token كامل للسجل
+        with open('token_full.txt', 'w') as f:
+            f.write(token_b64_new)
+        
+        # نوقف العملية هنا لأخذ الـToken
+        print("\n🛑 توقف العملية لإضافة الـToken")
+        sys.exit(0)
+    
+    return creds
+
+def publish_post(service, title, content, labels=None, draft=True):
+    """نشر مقال على بلوجر"""
+    try:
+        post_body = {
+            'title': title,
+            'content': content,
+            'labels': labels or ['github-auto', 'auto-publish'],
+        }
+        
+        print(f"📝 جاري نشر: {title}")
+        
+        # إرسال المنشور
+        request = service.posts().insert(
+            blogId=BLOG_ID,
+            body=post_body,
+            isDraft=draft
+        )
+        post = request.execute()
+        
+        status = "مسودة" if draft else "منشور"
+        print(f"✅ تم النشر بنجاح كـ {status}!")
+        if not draft and 'url' in post:
+            print(f"🔗 الرابط: {post['url']}")
+        
+        return post
+        
+    except HttpError as error:
+        print(f"❌ خطأ في النشر: {error}")
+        return None
+    except Exception as e:
+        print(f"❌ خطأ غير متوقع: {e}")
+        return None
+
+def read_posts_from_folder(folder_path='posts'):
+    """قراءة المقالات من مجلد posts"""
+    posts = []
+    
+    posts_dir = Path(folder_path)
+    
+    if not posts_dir.exists():
+        print(f"⚠️ مجلد '{folder_path}' غير موجود")
+        return posts
+    
+    # قراءة جميع ملفات .md
+    for md_file in posts_dir.glob('*.md'):
+        try:
+            with open(md_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # استخراج العنوان من أول سطر (يبدأ بـ #)
+            lines = content.strip().split('\n')
+            title = 'مقال بدون عنوان'
+            
+            if lines and lines[0].startswith('#'):
+                title = lines[0].replace('#', '').strip()
+                body_content = '\n'.join(lines[1:])
+            else:
+                title = md_file.stem.replace('-', ' ').title()
+                body_content = content
+            
+            posts.append({
+                'file': md_file.name,
+                'title': title,
+                'content': body_content,
+                'html_content': f"<h1>{title}</h1>\n<p>" + 
+                               body_content.replace('\n', '</p>\n<p>') + "</p>"
+            })
+            
+            print(f"📄 وجدت مقالة: {title}")
+            
+        except Exception as e:
+            print(f"⚠️ خطأ في قراءة {md_file}: {e}")
+    
+    return posts
+
+# ========== الدالة الرئيسية ==========
+def main():
+    print("="*60)
+    print("🚀 بدء عملية النشر التلقائي على بلوجر")
+    print("="*60)
+    
+    # التحقق من BLOG_ID
+    if not BLOG_ID:
+        print("❌ BLOG_ID غير محدد")
+        print("🔍 أضفه في GitHub Secrets → BLOG_ID")
+        sys.exit(1)
+    
+    print(f"📌 Blog ID: {BLOG_ID}")
+    print(f"🕒 الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("-" * 60)
+    
+    # 1. إعداد ملف client_secret.json
+    if not setup_client_secret():
+        return
+    
+    # 2. الحصول على بيانات الاعتماد
+    creds = get_credentials()
+    if not creds:
+        print("❌ فشل في الحصول على بيانات الاعتماد")
+        return
+    
+    # 3. الاتصال بخدمة بلوجر
+    try:
+        service = build('blogger', 'v3', credentials=creds)
+        print("✅ تم الاتصال بخدمة بلوجر بنجاح")
+    except Exception as e:
+        print(f"❌ فشل الاتصال ببلوجر: {e}")
+        return
+    
+    # 4. قراءة المقالات من مجلد posts
+    posts = read_posts_from_folder('posts')
+    
+    if not posts:
+        print("📭 لا توجد مقالات في مجلد posts")
+        
+        # نشر مقال تجريبي إذا لم توجد مقالات
+        print("\n🔧 نشر مقال تجريبي...")
+        test_post = {
+            'title': f'اختبار تلقائي - {datetime.now().strftime("%Y-%m-%d %H:%M")}',
+            'content': '''
+            <h2>🎉 نجاح!</h2>
+            <p>تم النشر تلقائياً عبر GitHub Actions</p>
+            <p>التاريخ: {}</p>
+            <p>يمكنك إضافة ملفات .md في مجلد <code>posts</code></p>
+            <ul>
+                <li>النقطة الأولى</li>
+                <li>النقطة الثانية</li>
+                <li>النقطة الثالثة</li>
+            </ul>
+            '''.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        }
+        
+        publish_type = os.environ.get('PUBLISH_TYPE', 'draft')
+        is_draft = publish_type.lower() == 'draft'
+        
+        result = publish_post(
+            service=service,
+            title=test_post['title'],
+            content=test_post['content'],
+            labels=['اختبار', 'github-actions', 'أولى'],
+            draft=is_draft
+        )
+        
+        if result:
+            print("✅ تم نشر المقالة التجريبية")
+    else:
+        # 5. نشر كل المقالات
+        print(f"\n📤 جاري نشر {len(posts)} مقالة...")
+        
+        publish_type = os.environ.get('PUBLISH_TYPE', 'draft')
+        is_draft = publish_type.lower() == 'draft'
+        published_count = 0
+        
+        for post in posts:
+            result = publish_post(
+                service=service,
+                title=post['title'],
+                content=post['html_content'],
+                labels=['auto-published', 'github'],
+                draft=is_draft
+            )
+            
+            if result:
+                published_count += 1
+        
+        print(f"\n📊 النتيجة: نُشر {published_count} من أصل {len(posts)} مقالة")
+    
+    print("\n" + "="*60)
+    print("🎉 اكتملت العملية بنجاح!")
+    print("="*60)
+
+# ========== نقطة الدخول ==========
+if __name__ == '__main__':
+    main()
+EOF
+          
+          echo "✅ تم إنشاء scripts/publish.py"
+      
+      # الخطوة 5: تثبيت المتطلبات
+      - name: 📦 تثبيت المكتبات المطلوبة
+        run: |
+          # إنشاء requirements.txt إذا لم يكن موجوداً
+          if [ ! -f "requirements.txt" ]; then
+            cat > requirements.txt << 'EOF'
+          google-api-python-client
+          google-auth-httplib2
+          google-auth-oauthlib
+          EOF
+          fi
+          
+          echo "📦 تثبيت المكتبات من requirements.txt..."
+          pip install -r requirements.txt
+      
+      # الخطوة 6: تشغيل السكريبت
+      - name: 🚀 تشغيل publish.py
+        env:
+          # **** المتغيرات السرية ****
+          BLOG_ID: ${{ secrets.BLOG_ID }}
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+          TOKEN_PICKLE: ${{ secrets.TOKEN_PICKLE }}
+          PUBLISH_TYPE: ${{ inputs.publish_type }}
+        run: |
+          echo "⚙️  إعدادات التشغيل:"
+          echo "   نوع النشر: $PUBLISH_TYPE"
+          echo "   BLOG_ID: ${{ secrets.BLOG_ID != '' && '✅ موجود' || '❌ مفقود' }}"
+          echo "   CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON != '' && '✅ موجود' || '❌ مفقود' }}"
+          echo "   TOKEN_PICKLE: ${{ secrets.TOKEN_PICKLE != '' && '✅ موجود' || '❌ مفقود' }}"
+          echo ""
+          
+          # التحقق من وجود المتغيرات المطلوبة
+          if [ -z "${{ secrets.BLOG_ID }}" ]; then
+            echo "❌ BLOG_ID غير موجود في Secrets"
+            echo ""
+            echo "📋 كيفية إضافته:"
+            echo "1. اذهب إلى مدونتك على blogger.com"
+            echo "2. انظر إلى الرقم في الرابط: .../edit/1234567890123456789/..."
+            echo "3. هذا الرقم هو BLOG_ID"
+            echo "4. أضفه في GitHub Secrets → BLOG_ID"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.CLIENT_SECRET_JSON }}" ]; then
+            echo "❌ CLIENT_SECRET_JSON غير موجود"
+            echo ""
+            echo "📋 كيفية الحصول عليه:"
+            echo "1. اذهب إلى https://console.cloud.google.com/"
+            echo "2. أنشئ مشروع جديد"
+            echo "3. تفعيل Blogger API"
+            echo "4. Create Credentials → OAuth client ID → Desktop App"
+            echo "5. انسخ الـ Client ID و Client Secret"
+            echo "6. أنشئ ملف client_secret.json بهذا المحتوى:"
+            echo '{"installed":{"client_id":"YOUR_CLIENT_ID","client_secret":"YOUR_CLIENT_SECRET","redirect_uris":["http://localhost"]}}'
+            echo "7. أضف المحتوى كاملاً في GitHub Secrets → CLIENT_SECRET_JSON"
+            exit 1
+          fi
+          
+          echo "▶️  تشغيل السكريبت..."
+          cd scripts
+          python publish.py
+      
+      # الخطوة 7: عرض النتيجة
+      - name: 📋 نتيجة التنفيذ
+        if: always()
+        run: |
+          echo ""
+          echo "="*60
+          echo "              📊 تقرير التنفيذ"
+          echo "="*60
+          echo "النتيجة: ${{ job.status }}"
+          echo "الوقت: $(date)"
+          
+          # عرض الملفات الموجودة
+          echo ""
+          echo "📁 الملفات في posts:"
+          ls -la posts/ 2>/dev/null || echo "المجلد فارغ"
+          
+          echo ""
+          echo "📁 الملفات في published:"
+          ls -la published/ 2>/dev/null || echo "المجلد فارغ"
+          
+          echo ""
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ العملية اكتملت بنجاح!"
+            echo "🔍 تحقق من مدونتك على blogger.com"
+          else
+            echo "⚠️  هناك مشكلة في التنفيذ"
+            echo "📖 راجع الـlogs أعلاه للتفاصيل"
+          fi
+          echo "="*60
