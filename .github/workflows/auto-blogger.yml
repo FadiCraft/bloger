@@ -1,9 +1,177 @@
 name: 🚀 نشر بلوجر أوتوماتيك
-on: [workflow_dispatch]
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_type:
+        description: 'نوع النشر'
+        required: false
+        default: 'draft'
+        type: choice
+        options:
+          - draft
+          - publish
 
 jobs:
-  test:
+  publish-to-blogger:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: 📝 طباعة رسالة
-        run: echo "Hello from GitHub Actions!"
+      # 1. تحميل الكود
+      - name: ⬇️ تحميل المستودع
+        uses: actions/checkout@v3
+      
+      # 2. إعداد Python
+      - name: 🐍 إعداد Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      # 3. إنشاء هيكل الملفات
+      - name: 📁 إنشاء الهيكل
+        run: |
+          mkdir -p scripts
+          mkdir -p posts
+          mkdir -p published
+      
+      # 4. إنشاء سكريبت النشر
+      - name: 📝 إنشاء publish.py
+        run: |
+          cat > scripts/publish.py << 'EOF'
+import os, json, base64, pickle, sys
+from datetime import datetime
+
+try:
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
+except ImportError:
+    print("❌ المكتبات غير مثبتة")
+    sys.exit(1)
+
+# إعدادات
+BLOG_ID = os.environ.get('BLOG_ID')
+CLIENT_SECRET_JSON = os.environ.get('CLIENT_SECRET_JSON')
+TOKEN_PICKLE = os.environ.get('TOKEN_PICKLE', '')
+PUBLISH_TYPE = os.environ.get('PUBLISH_TYPE', 'draft')
+
+def main():
+    print("="*60)
+    print("🚀 نشر تلقائي على بلوجر")
+    print("="*60)
+    
+    # التحقق من البيانات
+    if not BLOG_ID:
+        print("❌ BLOG_ID غير موجود")
+        return
+    
+    if not CLIENT_SECRET_JSON:
+        print("❌ CLIENT_SECRET_JSON غير موجود")
+        return
+    
+    # 1. إنشاء client_secret.json
+    try:
+        with open('client_secret.json', 'w') as f:
+            f.write(CLIENT_SECRET_JSON)
+        print("✅ تم إنشاء client_secret.json")
+    except Exception as e:
+        print(f"❌ خطأ: {e}")
+        return
+    
+    # 2. المصادقة
+    creds = None
+    SCOPES = ['https://www.googleapis.com/auth/blogger']
+    
+    if TOKEN_PICKLE and TOKEN_PICKLE.strip():
+        try:
+            token_data = base64.b64decode(TOKEN_PICKLE)
+            creds = pickle.loads(token_data)
+            print("✅ تم تحميل Token")
+        except:
+            print("⚠️ Token غير صالح")
+            creds = None
+    
+    if not creds or not creds.valid:
+        print("🔐 جاري المصادقة...")
+        try:
+            flow = InstalledAppFlow.from_client_secrets_file('client_secret.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+            
+            # حفظ Token الجديد
+            new_token = base64.b64encode(pickle.dumps(creds)).decode()
+            print("\n" + "="*60)
+            print("🎫 **انسخ هذا الـToken:**")
+            print("="*60)
+            print(new_token)
+            print("="*60)
+            print("\n📋 أضفه في GitHub Secrets → TOKEN_PICKLE")
+            return
+        except Exception as e:
+            print(f"❌ خطأ في المصادقة: {e}")
+            return
+    
+    # 3. النشر
+    try:
+        service = build('blogger', 'v3', credentials=creds)
+        
+        title = f"اختبار من GitHub - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        content = f'''
+        <h1>🎉 نجاح!</h1>
+        <p>تم النشر تلقائياً عبر GitHub Actions</p>
+        <p>التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <p>نوع النشر: {'مسودة' if PUBLISH_TYPE == 'draft' else 'منشور'}</p>
+        '''
+        
+        is_draft = PUBLISH_TYPE == 'draft'
+        
+        post = service.posts().insert(
+            blogId=BLOG_ID,
+            body={'title': title, 'content': content, 'labels': ['github', 'auto']},
+            isDraft=is_draft
+        ).execute()
+        
+        print(f"\n✅ تم النشر بنجاح!")
+        print(f"📌 العنوان: {title}")
+        print(f"📝 الحالة: {'مسودة' if is_draft else 'منشور'}")
+        
+    except Exception as e:
+        print(f"❌ خطأ في النشر: {e}")
+
+if __name__ == '__main__':
+    main()
+EOF
+          echo "✅ تم إنشاء scripts/publish.py"
+      
+      # 5. تثبيت المكتبات
+      - name: 📦 تثبيت المكتبات
+        run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+      
+      # 6. تشغيل السكريبت
+      - name: 🚀 تشغيل النشر
+        env:
+          BLOG_ID: ${{ secrets.BLOG_ID }}
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+          TOKEN_PICKLE: ${{ secrets.TOKEN_PICKLE }}
+          PUBLISH_TYPE: ${{ inputs.publish_type }}
+        run: |
+          echo "🔧 جاري التشغيل..."
+          echo "📌 نوع النشر: $PUBLISH_TYPE"
+          python scripts/publish.py
+      
+      # 7. نتيجة العملية
+      - name: 📊 النتيجة
+        if: always()
+        run: |
+          echo ""
+          echo "="*60
+          echo "              📋 تقرير التنفيذ"
+          echo "="*60
+          echo "✅ العملية اكتملت"
+          echo "🕒 الوقت: $(date)"
+          echo ""
+          echo "📌 **ملاحظات:**"
+          echo "1. إذا ظهر Token، انسخه وأضفه في Secrets → TOKEN_PICKLE"
+          echo "2. إذا نجح النشر، تحقق من مدونتك على blogger.com"
+          echo "3. جرب تغيير نوع النشر إلى 'publish' للنشر المباشر"
+          echo "="*60
